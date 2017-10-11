@@ -1,0 +1,63 @@
+---
+- name: CentOS7
+  hosts: all
+  # remote_user: vagrant
+  become: true
+  tags: centos7
+  tasks:
+    - name: install packages
+      yum: name={{ item }} state=latest
+      with_items:
+        - ntp
+        - vim
+        - php
+        - httpd
+        - docker
+        - python-setuptools
+      tags: yum
+    - name: activate services
+      service:
+        name: "{{ item.name }}"
+        state: "{{ item.state }}"
+        enabled: "{{ item.enabled }}"
+      with_items:
+        - { name: 'ntpd', state: 'started', enabled: 'yes'}
+        - { name: 'httpd', state: 'stopped', enabled: 'yes'}
+        - { name: 'docker', state: 'started', enabled: 'yes'}
+      tags: service
+    - name: configure sshd
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+        insertafter: '^#PasswordAuthentication'
+      notify: restart sshd
+      tags: sshd
+    - name: install pip
+      easy_install:
+        name: pip
+        state: latest
+      changed_when: false
+      # register: result
+    # - debug: var=result.stdout
+    - name: pip
+      pip:
+        name: docker-py
+    - name: docker nginx
+      docker_container:
+        name: nginx
+        image: nginx
+        detach: true
+        ports: 80:80
+      tags:
+        - docker
+        - nginx
+  handlers:
+    - name: restart Apache
+      service:
+        name: httpd
+        state: restarted
+    - name: restart sshd
+      service:
+        name: sshd
+        state: restarted
